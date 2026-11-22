@@ -1,0 +1,26 @@
+services:
+  stockpact:
+    build: .
+    image: stockpact:1.0.0
+    container_name: stockpact
+    ports:
+      - "8080:8080"
+    environment:
+      STOCKPACT_DATA_DIR: /data
+      STOCKPACT_BACKGROUND: "1"
+      STOCKPACT_RATE_LIMIT_RPS: "120"
+      STOCKPACT_RATE_LIMIT_BURST: "240"
+      STOCKPACT_LOG_LEVEL: INFO
+      # 生产务必设置：STOCKPACT_API_KEY=change-me
+    volumes:
+      - stockpact-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).status==200 else 1)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  stockpact-data:

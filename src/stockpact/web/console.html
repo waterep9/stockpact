@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StockPact · 订单履约控制台</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --line: #e3e6ea;
+    --ink: #14181f;
+    --muted: #6b7280;
+    --accent: #a25b00;
+    --accent-soft: #fdf3e3;
+    --blue: #1d4ed8;
+    --blue-soft: #e8eefc;
+    --green: #16794a;
+    --green-soft: #e6f5ed;
+    --red: #b42318;
+    --red-soft: #fdeceb;
+    --amber: #a25b00;
+    --amber-soft: #fdf3e3;
+    --gray: #4b5563;
+    --gray-soft: #f0f1f3;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand { font-weight: 700; font-size: 16px; letter-spacing: .2px; }
+  .brand span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 12.5px; }
+  .stats { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    border: 1px solid var(--line);
+    background: #fafbfc;
+    border-radius: 999px;
+    padding: 4px 11px;
+    font-size: 12px;
+    color: var(--gray);
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .pill b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .dot.warn { background: var(--amber); }
+  .dot.bad { background: var(--red); }
+
+  main { padding: 18px 22px 40px; display: grid; gap: 16px; grid-template-columns: 340px minmax(0, 1fr) 360px; align-items: start; }
+  @media (max-width: 1240px) { main { grid-template-columns: 1fr; } }
+  .col { display: grid; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .card > h2 {
+    margin: 0; padding: 11px 14px; font-size: 13px; font-weight: 650;
+    border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px;
+    background: #fcfcfd;
+  }
+  .card > h2 .hint { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  .card .body { padding: 12px 14px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 6px 6px; border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; }
+  td { padding: 7px 8px; border-bottom: 1px solid #f0f1f3; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mono { font-family: var(--mono); font-size: 11.5px; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; letter-spacing: .2px; }
+  .s-CREATED { background: var(--gray-soft); color: var(--gray); }
+  .s-STOCK_RESERVED { background: var(--blue-soft); color: var(--blue); }
+  .s-PAID { background: var(--amber-soft); color: var(--amber); }
+  .s-CONFIRMED { background: var(--green-soft); color: var(--green); }
+  .s-CANCELLED { background: var(--red-soft); color: var(--red); }
+  .s-PENDING, .s-SKIPPED { background: var(--gray-soft); color: var(--gray); }
+  .s-SUCCEEDED, .s-PUBLISHED { background: var(--green-soft); color: var(--green); }
+  .s-RUNNING { background: var(--blue-soft); color: var(--blue); }
+  .s-FAILED, .s-DEAD, .s-COMPENSATED { background: var(--red-soft); color: var(--red); }
+
+  input, select, button { font: inherit; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px;
+    background: #fff; color: var(--ink);
+  }
+  input:focus, select:focus { outline: 2px solid #cbd5e1; outline-offset: 0; }
+  button {
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 12.5px; font-weight: 550;
+  }
+  button:hover { background: #f8f9fa; }
+  button.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+  button.primary:hover { background: #232a34; }
+  button.ghost { border-color: transparent; color: var(--accent); background: transparent; padding: 3px 6px; }
+  button.ghost:hover { background: var(--accent-soft); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .field { margin-bottom: 9px; }
+  .field label { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+
+  .order-item { padding: 9px 12px; border-bottom: 1px solid #f0f1f3; cursor: pointer; display: grid; gap: 3px; }
+  .order-item:hover { background: #fafbfc; }
+  .order-item.active { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .order-item .l1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .order-item .l2 { color: var(--muted); font-size: 11.5px; display: flex; justify-content: space-between; }
+  .scroll { max-height: 380px; overflow: auto; }
+
+  .flow { display: flex; align-items: stretch; gap: 0; margin: 6px 0 14px; }
+  .flow .node { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fcfcfd; }
+  .flow .node + .node { margin-left: 22px; position: relative; }
+  .flow .node + .node::before {
+    content: "→"; position: absolute; left: -18px; top: 50%; transform: translateY(-50%); color: #b9bec7; font-size: 13px;
+  }
+  .flow .node .name { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .flow .node .state { font-size: 12px; font-weight: 650; margin-top: 2px; }
+  .flow .node.ok { background: var(--green-soft); border-color: #bfe3d0; }
+  .flow .node.bad { background: var(--red-soft); border-color: #f3c8c4; }
+  .flow .node.run { background: var(--blue-soft); border-color: #c8d7fb; }
+  .flow .node.compensation { border-style: dashed; background: #fbfbfc; }
+  .flow .node.compensation .state, .flow .node.compensation .name { color: #9aa1ad; }
+  .tag { display: inline-block; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+
+  .timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 1px dashed #d6dae0; }
+  .timeline li { position: relative; padding: 0 0 12px 12px; }
+  .timeline li::before {
+    content: ""; position: absolute; left: -18px; top: 5px; width: 7px; height: 7px; border-radius: 50%;
+    background: #fff; border: 2px solid var(--accent);
+  }
+  .timeline .t { font-size: 12.5px; font-weight: 600; }
+  .timeline .m { font-size: 11.5px; color: var(--muted); }
+  .timeline .p { font-size: 11px; color: #7b8290; font-family: var(--mono); word-break: break-all; }
+
+  .kv { display: grid; grid-template-columns: 96px 1fr; gap: 5px 10px; font-size: 12.5px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 10px 2px; text-align: center; }
+  .feed { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+  .feed li { padding: 7px 0; border-bottom: 1px solid #f2f3f5; display: grid; gap: 2px; }
+  .feed li:last-child { border-bottom: none; }
+  .feed .meta { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
+
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 12.5px; }
+  .toggle { position: relative; width: 38px; height: 21px; flex: none; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle span { position: absolute; inset: 0; background: #d7dbe1; border-radius: 999px; transition: .18s; cursor: pointer; }
+  .toggle span::after { content: ""; position: absolute; width: 15px; height: 15px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .18s; }
+  .toggle input:checked + span { background: var(--accent); }
+  .toggle input:checked + span::after { transform: translateX(17px); }
+
+  #toast {
+    position: fixed; right: 20px; bottom: 20px; display: grid; gap: 8px; z-index: 40;
+  }
+  #toast div {
+    background: #14181f; color: #fff; padding: 9px 13px; border-radius: 8px; font-size: 12.5px;
+    box-shadow: 0 8px 24px rgba(16, 20, 26, .18); max-width: 380px; animation: in .18s ease-out;
+  }
+  #toast div.err { background: var(--red); }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } }
+  .hint-line { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  .report { font-family: var(--mono); font-size: 11px; white-space: pre-wrap; background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 9px; max-height: 200px; overflow: auto; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="brand">Stock<span>Pact</span></div>
+    <div class="sub">订单履约与库存预留平台 · Saga 编排 / 事务性 Outbox</div>
+  </div>
+  <div class="stats">
+    <span class="pill"><span class="dot" id="healthDot"></span><span id="healthText">连接中…</span></span>
+    <span class="pill">在途订单 <b id="statInFlight">-</b></span>
+    <span class="pill">Outbox 待投递 <b id="statOutbox">-</b></span>
+    <span class="pill">在库/预留 <b id="statStock">-</b></span>
+  </div>
+</header>
+
+<main>
+  <!-- 左列 -->
+  <div class="col">
+    <section class="card">
+      <h2>库存与商品 <span class="hint">读路径走 TTL 缓存</span></h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>SKU</th><th class="num">在库</th><th class="num">预留</th><th class="num">可售</th><th></th></tr></thead>
+          <tbody id="inventoryBody"><tr><td colspan="5" class="empty">加载中…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>下单 <span class="hint">服务端定价 + 幂等键</span></h2>
+      <div class="body">
+        <div class="field">
+          <label>客户 ID</label>
+          <input id="customerId" type="text" value="cust-1024" />
+        </div>
+        <div class="field">
+          <label>商品</label>
+          <select id="skuSelect"></select>
+        </div>
+        <div class="row" style="margin-bottom:9px">
+          <div style="flex:1">
+            <label style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">数量</label>
+            <input id="qty" type="number" min="1" value="1" />
+          </div>
+          <div style="flex:1.2">
+            <label style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">幂等键</label>
+            <input id="idemKey" type="text" placeholder="留空则不启用" />
+          </div>
+        </div>
+        <div class="row">
+          <button class="primary" id="btnCreate" style="flex:1">提交订单</button>
+          <button id="btnDup" title="用相同幂等键再提交一次，验证重放">重放</button>
+        </div>
+        <div class="hint-line">重复点击「重放」应返回同一订单号（HTTP 200 + replay=true）。</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>混沌开关 <span class="hint">运行期注入故障</span></h2>
+      <div class="body">
+        <div class="switch">
+          <span>支付网关不响应</span>
+          <label class="toggle"><input type="checkbox" id="chaosStall" /><span></span></label>
+        </div>
+        <div class="field">
+          <label>支付失败率 <b id="rateLabel">0%</b></label>
+          <input type="range" id="chaosRate" min="0" max="100" step="10" value="0" style="width:100%" />
+        </div>
+        <div class="row">
+          <button id="btnReconcile" style="flex:1">对账（含自愈）</button>
+        </div>
+        <div class="report" id="reconcileReport" style="margin-top:9px">尚未执行对账。</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 中列 -->
+  <div class="col">
+    <section class="card">
+      <h2>订单 <span class="hint" id="ordersHint">点击查看 Saga 时间线</span></h2>
+      <div class="scroll" style="max-height:270px" id="ordersList"><div class="empty">加载中…</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Saga 执行链 <span class="hint" id="detailHint">—</span></h2>
+      <div class="body" id="detailBody"><div class="empty">选择一笔订单查看详情。</div></div>
+    </section>
+  </div>
+
+  <!-- 右列 -->
+  <div class="col">
+    <section class="card">
+      <h2>Outbox 事件 <span class="hint">至少一次投递</span></h2>
+      <div class="scroll" style="max-height:250px">
+        <table>
+          <thead><tr><th>#</th><th>事件</th><th>状态</th><th class="num">尝试</th></tr></thead>
+          <tbody id="outboxBody"><tr><td colspan="4" class="empty">加载中…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>读模型事件流 <span class="hint">由消费者投影</span></h2>
+      <div class="body"><ul class="feed" id="feedList"><li class="empty">加载中…</li></ul></div>
+    </section>
+
+    <section class="card">
+      <h2>审计日志 <span class="hint">谁在什么时候做了什么</span></h2>
+      <div class="body"><ul class="feed" id="auditList"><li class="empty">加载中…</li></ul></div>
+    </section>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const state = { products: [], orders: [], ordersTotal: 0, selected: null, idem: new Map() };
+
+function toast(msg, isErr) {
+  const el = document.createElement('div');
+  if (isErr) el.className = 'err';
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3600);
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch (e) { body = { raw: text }; }
+  if (!res.ok) {
+    const msg = (body && (body.message || body.error)) || res.statusText;
+    throw new Error(`${res.status} ${msg}`);
+  }
+  return { body, headers: res.headers };
+}
+
+const money = c => '¥' + (c / 100).toFixed(2);
+const shortTime = s => s ? s.replace('T', ' ').replace('Z', '').slice(5, 19) : '-';
+
+/* ---------------- 渲染 ---------------- */
+function renderInventory() {
+  const tb = document.getElementById('inventoryBody');
+  if (!state.products.length) { tb.innerHTML = '<tr><td colspan="5" class="empty">暂无商品，先通过 API 建档</td></tr>'; return; }
+  tb.innerHTML = state.products.map(p => `
+    <tr>
+      <td><div class="mono">${p.sku}</div><div style="font-size:11px;color:var(--muted)">${p.name}</div></td>
+      <td class="num">${p.on_hand}</td>
+      <td class="num">${p.reserved}</td>
+      <td class="num"><b>${p.available}</b></td>
+      <td><button class="ghost" data-restock="${p.sku}">+10</button></td>
+    </tr>`).join('');
+  tb.querySelectorAll('[data-restock]').forEach(btn => {
+    btn.onclick = async () => {
+      try {
+        await api(`/api/inventory/${btn.dataset.restock}/restock`, { method: 'POST', body: JSON.stringify({ quantity: 10 }) });
+        toast(`已补货 ${btn.dataset.restock} +10`); await refresh();
+      } catch (e) { toast(e.message, true); }
+    };
+  });
+  const sel = document.getElementById('skuSelect');
+  const prev = sel.value;
+  sel.innerHTML = state.products.map(p => `<option value="${p.sku}">${p.sku} · ${money(p.price_cents)}（余 ${p.available}）</option>`).join('');
+  if (prev) sel.value = prev;
+}
+
+function renderOrders() {
+  const box = document.getElementById('ordersList');
+  if (!state.orders.length) { box.innerHTML = '<div class="empty">暂无订单</div>'; return; }
+  box.innerHTML = state.orders.map(o => `
+    <div class="order-item ${o.order_code === state.selected ? 'active' : ''}" data-code="${o.order_code}">
+      <div class="l1"><span class="mono">${o.order_code}</span><span class="badge s-${o.state}">${o.state}</span></div>
+      <div class="l2"><span>${o.customer_id} · ${o.items_count} 行 · ${money(o.total_cents)}</span><span>${shortTime(o.updated_at)}</span></div>
+    </div>`).join('');
+  box.querySelectorAll('[data-code]').forEach(el => {
+    el.onclick = () => { state.selected = el.dataset.code; renderOrders(); loadDetail(); };
+  });
+  document.getElementById('ordersHint').textContent = `最近 ${state.orders.length} 笔 · 总计 ${state.ordersTotal || state.orders.length} 笔`;
+}
+
+const STEP_LABEL = {
+  RESERVE_STOCK: '预留库存', CHARGE_PAYMENT: '扣款', CONFIRM_ORDER: '确认出库', RELEASE_STOCK: '释放库存',
+};
+const STEP_CLASS = { SUCCEEDED: 'ok', COMPENSATED: 'bad', FAILED: 'bad', SKIPPED: '', PENDING: '', RUNNING: 'run' };
+
+function renderDetail(d) {
+  const body = document.getElementById('detailBody');
+  if (!d) { body.innerHTML = '<div class="empty">选择一笔订单查看详情。</div>'; return; }
+  document.getElementById('detailHint').textContent = d.order_code;
+  const steps = d.saga_steps.length ? d.saga_steps : [];
+  const flow = steps.map(s => {
+    const isComp = s.step === 'RELEASE_STOCK';
+    const cls = isComp && s.status === 'PENDING' ? 'compensation' : (STEP_CLASS[s.status] || '');
+    return `
+    <div class="node ${cls}">
+      <div class="name">${s.step}${isComp ? '<span class="tag">补偿</span>' : ''}</div>
+      <div class="state">${STEP_LABEL[s.step] || s.step}</div>
+      <div class="name" style="margin-top:3px">${s.status}${s.attempts ? ' · 第' + s.attempts + '次' : ''}</div>
+    </div>`;
+  }).join('');
+
+  const timeline = d.timeline.slice().reverse().map(t => `
+    <li>
+      <div class="t">${t.event_type}</div>
+      <div class="m">${shortTime(t.at)}${t.from_state ? ` · ${t.from_state} → ${t.to_state || '-'}` : ''}</div>
+      ${Object.keys(t.payload || {}).length ? `<div class="p">${JSON.stringify(t.payload).slice(0, 220)}</div>` : ''}
+    </li>`).join('');
+
+  const payment = d.payment
+    ? `<span class="badge s-${d.payment.status === 'CAPTURED' ? 'CONFIRMED' : d.payment.status === 'REFUNDED' ? 'CANCELLED' : 'FAILED'}">${d.payment.status}</span>`
+    : '<span class="badge s-CREATED">未发起</span>';
+
+  body.innerHTML = `
+    <div class="flow">${flow || '<div class="empty">无步骤</div>'}</div>
+    <div class="kv" style="margin-bottom:12px">
+      <dt>状态</dt><dd><span class="badge s-${d.state}">${d.state}</span> ${d.cancel_reason ? `<span class="m" style="color:var(--muted);font-size:11.5px">（${d.cancel_reason}）</span>` : ''}</dd>
+      <dt>金额</dt><dd>${money(d.total_cents)}</dd>
+      <dt>支付</dt><dd>${payment}</dd>
+      <dt>履约时限</dt><dd class="mono">${shortTime(d.deadline_at)}</dd>
+      <dt>预留</dt><dd class="mono">${d.reservations.map(r => `${r.sku}×${r.quantity} ${r.status}`).join(' / ') || '—'}</dd>
+    </div>
+    <div class="row" style="margin-bottom:14px">
+      <button data-act="advance">推进 Saga</button>
+      <button data-act="cancel">取消并补偿</button>
+      <button data-act="retry">立即重试</button>
+    </div>
+    <div style="font-size:12px;font-weight:650;margin-bottom:6px">时间线</div>
+    <ul class="timeline">${timeline || '<li class="empty">无事件</li>'}</ul>`;
+
+  body.querySelectorAll('[data-act]').forEach(btn => {
+    btn.onclick = async () => {
+      const act = btn.dataset.act;
+      btn.disabled = true;
+      try {
+        if (act === 'cancel') {
+          await api(`/api/orders/${d.order_code}/cancel`, { method: 'POST', body: JSON.stringify({ reason: 'CUSTOMER_REQUEST' }) });
+        } else {
+          await api(`/api/orders/${d.order_code}/${act}`, { method: 'POST' });
+        }
+        toast(`${d.order_code}：${act} 完成`);
+        await refresh();
+      } catch (e) { toast(e.message, true); } finally { btn.disabled = false; }
+    };
+  });
+}
+
+function renderOutbox(data) {
+  const tb = document.getElementById('outboxBody');
+  const items = data.items || [];
+  if (!items.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">暂无事件</td></tr>'; return; }
+  tb.innerHTML = items.map(i => `
+    <tr>
+      <td class="mono">${i.id}</td>
+      <td><div class="mono">${i.event_type}</div><div style="font-size:10.5px;color:var(--muted)">${i.order_code || '-'}</div></td>
+      <td><span class="badge s-${i.status}">${i.status}</span></td>
+      <td class="num">${i.attempts}</td>
+    </tr>`).join('');
+}
+
+function renderFeed(data) {
+  const feed = data.feed || [];
+  const box = document.getElementById('feedList');
+  box.innerHTML = feed.length ? feed.map(f => `
+    <li><span>${f.summary}</span><div class="meta"><span class="mono">${f.order_code}</span><span>${shortTime(f.at)}</span></div></li>`).join('')
+    : '<li class="empty">暂无投影事件</li>';
+}
+
+function renderAudit(data) {
+  const items = data.items || [];
+  const box = document.getElementById('auditList');
+  box.innerHTML = items.length ? items.slice(0, 12).map(a => `
+    <li><span>${a.action} · ${a.target}</span>
+      <div class="meta"><span>${a.actor}${a.request_id ? ' · ' + a.request_id.slice(0, 8) : ''}</span><span>${shortTime(a.at)}</span></div></li>`).join('')
+    : '<li class="empty">暂无审计记录</li>';
+}
+
+/* ---------------- 数据拉取 ---------------- */
+async function loadDetail() {
+  if (!state.selected) { renderDetail(null); return; }
+  try {
+    const { body } = await api(`/api/orders/${state.selected}`);
+    renderDetail(body);
+  } catch (e) { renderDetail(null); }
+}
+
+async function refresh() {
+  try {
+    const [products, orders, sagas, outbox, feed, audit] = await Promise.all([
+      api('/api/inventory'), api('/api/orders?limit=40'), api('/api/ops/sagas'),
+      api('/api/ops/outbox?limit=24'), api('/api/ops/feed?limit=18'), api('/api/ops/audit?limit=20'),
+    ]);
+    state.products = products.body.items || [];
+    state.orders = orders.body.items || [];
+    state.ordersTotal = orders.body.total || state.orders.length;
+    if (!state.selected && state.orders.length) state.selected = state.orders[0].order_code;
+    if (state.selected && !state.orders.find(o => o.order_code === state.selected)) state.selected = null;
+
+    renderInventory(); renderOrders(); renderOutbox(outbox.body); renderFeed(feed.body); renderAudit(audit.body);
+
+    const s = sagas.body;
+    document.getElementById('statInFlight').textContent = s.in_flight;
+    document.getElementById('statOutbox').textContent = s.outbox_pending;
+    const onHand = state.products.reduce((acc, p) => acc + p.on_hand, 0);
+    const reserved = state.products.reduce((acc, p) => acc + p.reserved, 0);
+    document.getElementById('statStock').textContent = state.products.length ? `${onHand}/${reserved}` : '-';
+
+    const c = s.chaos || {};
+    document.getElementById('chaosStall').checked = !!c.payment_stall;
+    const rate = Math.round((c.payment_failure_rate || 0) * 100);
+    document.getElementById('chaosRate').value = rate;
+    document.getElementById('rateLabel').textContent = rate + '%';
+
+    const dot = document.getElementById('healthDot');
+    dot.className = 'dot' + (s.outbox_pending > 20 ? ' warn' : '');
+    document.getElementById('healthText').textContent = '服务正常 · ' + new Date().toLocaleTimeString('zh-CN', { hour12: false });
+
+    await loadDetail();
+  } catch (e) {
+    document.getElementById('healthDot').className = 'dot bad';
+    document.getElementById('healthText').textContent = '连接失败';
+  }
+}
+
+/* ---------------- 交互 ---------------- */
+async function createOrder(replay) {
+  const customer_id = document.getElementById('customerId').value.trim() || 'cust-1024';
+  const sku = document.getElementById('skuSelect').value;
+  const quantity = parseInt(document.getElementById('qty').value, 10) || 1;
+  let key = document.getElementById('idemKey').value.trim();
+  if (replay) {
+    const saved = state.idem.get(customer_id + sku);
+    if (!saved) { toast('先成功提交一次再重放', true); return; }
+    key = saved;
+  } else if (!key) {
+    key = 'ui-' + Math.random().toString(36).slice(2, 10);
+  }
+  const headers = { 'Idempotency-Key': key };
+  try {
+    const { body, headers: resHeaders } = await api('/api/orders', {
+      method: 'POST', headers,
+      body: JSON.stringify({ customer_id, items: [{ sku, quantity }] }),
+    });
+    if (!replay) state.idem.set(customer_id + sku, key);
+    document.getElementById('idemKey').value = key;
+    toast(`${body.replayed ? '重放命中' : '下单成功'}：${body.order_code}（${body.state}）`);
+    state.selected = body.order_code;
+    await refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+document.getElementById('btnCreate').onclick = () => createOrder(false);
+document.getElementById('btnDup').onclick = () => createOrder(true);
+document.getElementById('chaosStall').onchange = async e => {
+  try { await api('/api/ops/chaos', { method: 'PUT', body: JSON.stringify({ payment_stall: e.target.checked }) }); toast('混沌开关已更新'); await refresh(); }
+  catch (err) { toast(err.message, true); }
+};
+document.getElementById('chaosRate').oninput = e => { document.getElementById('rateLabel').textContent = e.target.value + '%'; };
+document.getElementById('chaosRate').onchange = async e => {
+  try { await api('/api/ops/chaos', { method: 'PUT', body: JSON.stringify({ payment_failure_rate: parseInt(e.target.value, 10) / 100 }) }); toast('支付失败率已更新'); await refresh(); }
+  catch (err) { toast(err.message, true); }
+};
+document.getElementById('btnReconcile').onclick = async () => {
+  const box = document.getElementById('reconcileReport');
+  box.textContent = '对账中…';
+  try {
+    const { body } = await api('/api/ops/reconcile?repair=true', { method: 'GET' });
+    box.textContent = `healthy=${body.healthy}\n` + JSON.stringify(body.counters) +
+      (body.issues.length ? '\n' + body.issues.map(i => `[${i.severity}] ${i.type}: ${i.detail}`).join('\n') : '\n未发现不变量违规');
+    toast(body.healthy ? '对账通过' : `发现 ${body.issues.length} 项问题`, !body.healthy);
+    await refresh();
+  } catch (e) { box.textContent = e.message; toast(e.message, true); }
+};
+
+refresh();
+setInterval(refresh, 2500);
+</script>
+</body>
+</html>
